@@ -1,6 +1,6 @@
 import express from "express"
 import cors from "cors"
-import cookieParser from "cookie-parser"
+// import cookieParser from "cookie-parser"
 
 const app = express()
 
@@ -22,6 +22,6 @@ import userRouter from './routes/user.route.js'
 app.use("/api/v1/users", userRouter)
 
 
-// http://localhost:8000/api/v1/users/register
+// http://localhost:8000/api/v1/users/donate
 
 export { app }

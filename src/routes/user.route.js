@@ -1,8 +1,8 @@
 import { Router } from "express";
-import {donate} from "../controllers/user.controller.js";
+import {donateCashFree, confirmDonationCashFree, createOrderInstaMojo} from "../controllers/user.controller.js";
 
 const router = Router();
 
-router.route("/donate").post(donate)
+router.route("/donate").post( createOrderInstaMojo)
 
 export default router;

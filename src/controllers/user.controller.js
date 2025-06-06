@@ -3,7 +3,7 @@ import axios from "axios";
 
 const createOrder = async (req, res) => {};
 
-const donate = async (req, res) => {
+const donateCashFree = async (req, res) => {
   const { name, email, phone, amount, message } = req.body;
 
   try {
@@ -41,7 +41,7 @@ const donate = async (req, res) => {
   }
 };
 
-const confirmDonation = async (req, res) => {
+const confirmDonationCashFree = async (req, res) => {
   const { order_id } = req.query;
 
   try {
@@ -62,4 +62,40 @@ const confirmDonation = async (req, res) => {
   }
 };
 
-export { donate, confirmDonation };
+const createOrderInstaMojo = async (req, res) => {
+  try {
+    const { name, email, phone, amount, purpose } = req.body;
+
+    const response = await axios.post(
+      `${BASE_URL}payment-requests/`,
+      {
+        purpose: purpose || "Test Payment",
+        amount: amount || "100",
+        buyer_name: name,
+        email,
+        phone,
+        redirect_url: "/donation-project-frontend/payment-success",
+        send_email: true,
+        send_sms: true,
+        allow_repeated_payments: false,
+      },
+      {
+        headers: {
+          "X-Api-Key": process.env.INSTAMOJO_API_KEY,
+          "X-Auth-Token": process.env.INSTAMOJO_AUTH_TOKEN,
+        },
+      }
+    );
+
+    const longUrl = response.data.payment_request.longurl;
+    res.json({ paymentUrl: longUrl });
+  } catch (err) {
+    console.error(err?.response?.data || err.message);
+    res.status(500).json({ error: "Failed to create payment" });
+  }
+}
+
+  
+
+
+export { donateCashFree, confirmDonationCashFree, createOrderInstaMojo };

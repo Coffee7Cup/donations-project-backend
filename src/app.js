@@ -16,10 +16,12 @@ app.use(express.static("public"))
 
 //routes import
 import userRouter from './routes/user.route.js'
+import donorRoute from "./routes/donor.route.js"
 
 
 //routes declaration
 app.use("/api/v1/users", userRouter)
+app.use("/api/v1/donor", donorRoute)
 
 
 // http://localhost:8000/api/v1/users/donate

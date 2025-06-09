@@ -74,7 +74,7 @@ const createOrderInstaMojo = async (req, res) => {
         buyer_name: name,
         email,
         phone,
-        redirect_url: "/donation-project-frontend/payment-success",
+        redirect_url: "/donation-project-frontend/after-payment-page",//this url is showed even if the users cancles the payment BUT this url will get payment id etc
         send_email: true,
         send_sms: true,
         allow_repeated_payments: false,

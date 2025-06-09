@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import axios from "axios";
 import Payment from "../models/payment.model.js";
 import Donor from "../models/donors.models.js";
-
+import cloudinary from "../utils/cloudinary.js";
 // PAYMENT VERIFICATION CONTROLLER
 const verifyPayment = async (req, res) => {
   const BASE_URL = process.env.INSTAMOJO_BASE_URL || "https://api.instamojo.com/v2/";
@@ -63,30 +63,94 @@ const verifyPayment = async (req, res) => {
   }
 };
 
-// DONOR DETAILS UPLOAD CONTROLLER
 const uploadDetailsMegaDonor = async (req, res) => {
   try {
-    const { name, donation, date, type } = req.body;
+    const { name, donation, date } = req.body;
     const email = req.email;
 
-    const imageUrl = `data:image/jpeg;base64,${req.file.buffer.toString("base64")}`;
+    if (!name || !donation || !date || !req.file?.buffer) {
+      return res.status(400).json({ success: false, message: "Missing required fields" });
+    }
+
+    // Compress the image buffer using sharp
+    const compressedBuffer = await sharp(req.file.buffer)
+      .resize({ width: 1024 }) // optional: resize to max width 1024px, keep aspect ratio
+      .jpeg({ quality: 70 }) // compress jpeg to 70% quality
+      .toBuffer();
+
+    // Upload to Cloudinary
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: "donors" },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve(result);
+        }
+      );
+      // upload compressed image buffer instead of original
+      stream.end(compressedBuffer);
+    });
+
+    // Save donor details
+    await Donor.create({
+      name,
+      donation,
+      date,
+      type: 'mega',
+      image: result.secure_url, // Cloudinary URL
+    });
+
+    // Mark payment as completed
+    await Payment.findOneAndUpdate({ email }, { detailsUploaded: true });
+
+    res.json({ success: true, message: "Donor details uploaded" });
+  } catch (err) {
+    console.error("Upload error:", err);
+    res.status(500).json({ success: false, message: "Upload failed" });
+  }
+};
+
+const uploadDetailsPremiumDonor = async (req, res) => {
+  try {
+    const { name, donation, date } = req.body;
+    const email = req.email;
+
+    if (!name || !donation || !date || !type) {
+      return res.status(400).json({ success: false, message: "Missing required fields" });
+    }
+
+    if (type !== "premium") {
+      return res.status(400).json({ success: false, message: "Invalid donor type" });
+    }
 
     await Donor.create({
       name,
       donation,
       date,
-      type,
-      image: imageUrl,
+      type : 'premium',
     });
 
     await Payment.findOneAndUpdate({ email }, { detailsUploaded: true });
 
-    res.json({ success: true, message: "Donor details uploaded" });
+    res.json({ success: true, message: "Premium donor details uploaded" });
   } catch (err) {
-    console.error(err);
+    console.error("Upload failed:", err);
     res.status(500).json({ success: false, message: "Upload failed" });
   }
 };
 
-export { verifyPayment, uploadDetailsMegaDonor };
+const getAllDonors = async (req, res) => {
+
+try {
+    // Fetch all donors from DB, optionally you can paginate or filter later
+    const donors = await Donor.find().sort({ createdAt: -1 }); // newest first
+
+    res.json({ success: true, donors });
+  } catch (err) {
+    console.error("Error fetching donors:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch donors" });
+  }
+}
+
+export { verifyPayment, uploadDetailsMegaDonor, uploadDetailsPremiumDonor, getAllDonors};
 

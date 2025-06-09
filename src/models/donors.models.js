@@ -7,15 +7,11 @@ const donorSchema = new Schema({
   },
   donation: {
     type: String,
-    required: function () {
-      return this.type === 'mega' || this.type === 'premium';
-    },
+    required: true, 
   },
   date: {
     type: Date,
-    required: function () {
-      return this.type === 'mega';
-    },
+    required: true,
   },
   image: {
     type: String,
@@ -25,7 +21,7 @@ const donorSchema = new Schema({
   },
   type: {
     type: String,
-    enum: ['mega', 'premium', 'contributor'],
+    enum: ['mega', 'premium'],
     required: true,
   },
 }, { timestamps: true });

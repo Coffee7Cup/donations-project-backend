@@ -39,10 +39,12 @@ const paymentSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  purpose: {
+    type : String,
+  },
   donorType : {
     type: String,
-    enum: ['mega', 'premium'],
- 
+    enum: ['mega', 'premium'], 
   }
 }, {
   timestamps: true, // createdAt and updatedAt

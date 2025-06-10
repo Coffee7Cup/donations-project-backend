@@ -5,7 +5,7 @@ import { verifyPayment } from "../controllers/donor.controller.js";
 const router = Router();
 
 router.route("/donate").post(createOrderInstaMojo)
-router.route("verify-payment").get(verifyPayment);
+router.route("/verify-payment").get(verifyPayment);
 
 
 

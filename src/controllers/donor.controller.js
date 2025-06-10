@@ -152,5 +152,28 @@ try {
   }
 }
 
-export { verifyPayment, uploadDetailsMegaDonor, uploadDetailsPremiumDonor, getAllDonors};
+const uploadDonorDetails =  async (req, res, next) => {
+  try {
+    const email = req.email;
+
+    // Fetch donorType from Payment DB using email
+    const payment = await Payment.findOne({ email });
+    if (!payment) return res.status(404).json({ success: false, message: "Payment info not found" });
+
+    // Route to proper handler based on donorType
+    if (payment.donorType === "mega") {
+      return uploadDetailsMegaDonor(req, res, next);
+    } else if (payment.donorType === "premium") {
+      return uploadDetailsPremiumDonor(req, res, next);
+    } else {
+      return res.status(400).json({ success: false, message: "Unknown donor type" });
+    }
+  } catch (err) {
+    next(err);
+  }
+}
+   
+
+
+export { verifyPayment, uploadDetailsMegaDonor, uploadDetailsPremiumDonor,    uploadDonorDetails, getAllDonors};
 

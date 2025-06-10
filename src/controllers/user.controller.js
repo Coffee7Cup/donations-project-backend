@@ -67,7 +67,7 @@ const createOrderInstaMojo = async (req, res) => {
     const { name, email, phone, amount, purpose } = req.body;
 
     const response = await axios.post(
-      `${BASE_URL}payment-requests/`,
+      `${process.env.INSTAMOJO_BASE_URL}payment-requests/`,
       {
         purpose: purpose || "Test Payment",
         amount: amount || "100",

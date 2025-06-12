@@ -11,12 +11,14 @@ const verifyJWT = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.email = decoded.email;
+    req.jwt = decoded;
     next();
   } catch (err) {
-    return res.status(401).json({ message: "Invalid token" });
+    return res
+      .status(401)
+      .json({ message: "Invalid token" });
   }
 };
-
+  
 export {verifyJWT};
 

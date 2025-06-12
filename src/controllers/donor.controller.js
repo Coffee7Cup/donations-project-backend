@@ -1,84 +1,33 @@
 import jwt from "jsonwebtoken";
-import axios from "axios";
-import Payment from "../models/payment.model.js";
-import Donor from "../models/donors.models.js";
+import sharp from "sharp";
+import { Payment } from "../models/payment.model.js";
+import { Donor } from "../models/donors.models.js";
 import cloudinary from "../utils/cloudinary.js";
-// PAYMENT VERIFICATION CONTROLLER
-const verifyPayment = async (req, res) => {
-  const BASE_URL = process.env.INSTAMOJO_BASE_URL || "https://api.instamojo.com/v2/";
-  const { payment_request_id, payment_id } = req.query;
 
-  if (!payment_request_id || !payment_id) {
-    return res.status(400).json({ success: false, message: "Missing parameters" });
-  }
-
-  try {
-    const response = await axios.get(
-      `${BASE_URL}payment-requests/${payment_request_id}/${payment_id}/`,
-      {
-        headers: {
-          "X-Api-Key": process.env.INSTAMOJO_API_KEY,
-          "X-Auth-Token": process.env.INSTAMOJO_AUTH_TOKEN,
-        },
-      }
-    );
-
-    const payment = response.data.payment_request.payment;
-    const status = payment.status === "Credit" ? "Credit" : (payment.status || "Failed");
-
-    const donorJwt = status === "Credit"
-      ? jwt.sign({ email: payment.email }, process.env.JWT_SECRET, { expiresIn: "7d" })
-      : null;
-
-    await Payment.findOneAndUpdate(
-      { paymentId: payment.payment_id },
-      {
-        paymentId: payment.payment_id,
-        paymentRequestId: payment.payment_request_id,
-        status,
-        amount: parseFloat(payment.amount),
-        buyerName: payment.buyer_name,
-        email: payment.email,
-        phone: payment.phone,
-        purpose: payment.purpose,
-        donorJwt,
-        detailsUploaded: false,
-      },
-      { upsert: true, new: true }
-    );
-
-    if (status === "Credit") {
-      return res.json({
-        success: true,
-        email: payment.email,
-        donorType: "mega",
-        jwt: donorJwt,
-      });
-    } else {
-      return res.status(400).json({ success: false, message: "Payment not credited" });
-    }
-  } catch (err) {
-    console.error("Verification error:", err?.response?.data || err.message);
-    return res.status(500).json({ success: false, message: "Verification failed" });
-  }
-};
-
+// Mega donor upload
 const uploadDetailsMegaDonor = async (req, res) => {
   try {
     const { name, donation, date } = req.body;
-    const email = req.email;
+    const paymentId = req.jwt.paymentId;
 
-    if (!name || !donation || !date || !req.file?.buffer) {
-      return res.status(400).json({ success: false, message: "Missing required fields" });
+    const payment = await Payment.findById(paymentId);
+    if (!payment) {
+      return res.status(404).json({ success: false, message: "Payment not found" });
     }
 
-    // Compress the image buffer using sharp
+    if (payment.uploadCount >= 2) {
+      return res.status(403).json({ success: false, message: "Upload limit reached for this donor" });
+    }
+
+    if (!name || !donation || !date || !req.file?.buffer) {
+      return res.status(400).json({ success: false, message: "Missing required fields for mega donor" });
+    }
+
     const compressedBuffer = await sharp(req.file.buffer)
-      .resize({ width: 1024 }) // optional: resize to max width 1024px, keep aspect ratio
-      .jpeg({ quality: 70 }) // compress jpeg to 70% quality
+      .resize({ width: 1024 })
+      .jpeg({ quality: 70 })
       .toBuffer();
 
-    // Upload to Cloudinary
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         { folder: "donors" },
@@ -87,93 +36,153 @@ const uploadDetailsMegaDonor = async (req, res) => {
           resolve(result);
         }
       );
-      // upload compressed image buffer instead of original
       stream.end(compressedBuffer);
     });
 
-    // Save donor details
-    await Donor.create({
-      name,
-      donation,
-      date,
-      type: 'mega',
-      image: result.secure_url, // Cloudinary URL
+    await Donor.findOneAndUpdate(
+      { paymentId }, 
+      {
+        name,
+        donation,
+        date,
+        type: "mega",
+        image: result.secure_url,
+      },
+      { upsert: true, new: true } // create if not exists
+    );
+    await Payment.findByIdAndUpdate(paymentId, {
+      detailsUploaded: true,
+      $inc: { uploadCount: 1 }
     });
 
-    // Mark payment as completed
-    await Payment.findOneAndUpdate({ email }, { detailsUploaded: true });
-
-    res.json({ success: true, message: "Donor details uploaded" });
+    res.json({ success: true, message: "Mega donor details uploaded" });
   } catch (err) {
-    console.error("Upload error:", err);
-    res.status(500).json({ success: false, message: "Upload failed" });
+    console.error("Mega upload error:", err);
+    res.status(500).json({ success: false, message: "Mega donor upload failed" });
   }
 };
 
+// Premium donor upload
 const uploadDetailsPremiumDonor = async (req, res) => {
   try {
     const { name, donation, date } = req.body;
-    const email = req.email;
+    const paymentId = req.jwt.paymentId;
 
-    if (!name || !donation || !date || !type) {
-      return res.status(400).json({ success: false, message: "Missing required fields" });
+    const payment = await Payment.findById(paymentId);
+    if (!payment) {
+      return res.status(404).json({ success: false, message: "Payment not found" });
     }
 
-    if (type !== "premium") {
-      return res.status(400).json({ success: false, message: "Invalid donor type" });
+    if (payment.uploadCount >= 2) {
+      return res.status(403).json({ success: false, message: "Upload limit reached for this donor" });
     }
 
-    await Donor.create({
-      name,
-      donation,
-      date,
-      type : 'premium',
+    if (!name || !donation || !date) {
+      return res.status(400).json({ success: false, message: "Missing required fields for premium donor" });
+    }
+
+    await Donor.findOneAndUpdate(
+      { paymentId },
+      {
+        name,
+        donation,
+        date,
+        type: "premium",
+      },
+      { upsert: true, new: true }
+    );
+
+    await Payment.findByIdAndUpdate(paymentId, {
+      detailsUploaded: true,
+      $inc: { uploadCount: 1 }
     });
-
-    await Payment.findOneAndUpdate({ email }, { detailsUploaded: true });
 
     res.json({ success: true, message: "Premium donor details uploaded" });
   } catch (err) {
-    console.error("Upload failed:", err);
-    res.status(500).json({ success: false, message: "Upload failed" });
+    console.error("Premium upload error:", err);
+    res.status(500).json({ success: false, message: "Premium donor upload failed" });
   }
 };
 
+
+// Smart redirect based on donorType
+const uploadDonorDetails = async (req, res, next) => {
+
+  try {
+
+    if(!req.file?.buffer){
+      return uploadDetailsPremiumDonor(req, res)
+    }else{
+      return uploadDetailsMegaDonor(req, res)
+    }
+
+  } catch (err) {
+    console.error("Donor details upload error:", err);
+    next(err);
+  }
+};
+
+// Get all donors
 const getAllDonors = async (req, res) => {
-
-try {
-    // Fetch all donors from DB, optionally you can paginate or filter later
-    const donors = await Donor.find().sort({ createdAt: -1 }); // newest first
-
+  try {
+    const donors = await Donor.find().sort({ createdAt: -1 });
     res.json({ success: true, donors });
   } catch (err) {
     console.error("Error fetching donors:", err);
     res.status(500).json({ success: false, message: "Failed to fetch donors" });
   }
-}
+};
 
-const uploadDonorDetails =  async (req, res, next) => {
-  try {
-    const email = req.email;
+// Get donations by email or phone
+const getDonationsByIdentifier = async (req, res) => {
+  const { identifier } = req.body;
 
-    // Fetch donorType from Payment DB using email
-    const payment = await Payment.findOne({ email });
-    if (!payment) return res.status(404).json({ success: false, message: "Payment info not found" });
-
-    // Route to proper handler based on donorType
-    if (payment.donorType === "mega") {
-      return uploadDetailsMegaDonor(req, res, next);
-    } else if (payment.donorType === "premium") {
-      return uploadDetailsPremiumDonor(req, res, next);
-    } else {
-      return res.status(400).json({ success: false, message: "Unknown donor type" });
-    }
-  } catch (err) {
-    next(err);
+  if (!identifier) {
+    return res.status(400).json({ success: false, message: "Identifier required" });
   }
+
+  try {
+    const donations = await Payment.find({
+      status: "paid",
+      $or: [{ email: identifier }, { phone: identifier }],
+    }).sort({ createdAt: -1 });
+
+    if (donations.length === 0) {
+      return res.json({ success: false, message: "No donations found" });
+    }
+
+    res.json({ success: true, donations });
+  } catch (err) {
+    console.error("Error fetching donations:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const getDonorType = async (req, res) => {
+  try{
+    
+    const paymentId = req.jwt.paymentId
+
+    const payment = await Payment.findOne({_id : paymentId})
+    if (!payment || !payment.donorType) {
+      return res.status(404).json({ success: false, message: "Donor type not found" });
+    }
+    
+    return res
+      .json({
+        success : true,
+        type : payment.donorType
+      })
+
+  }catch(err){
+    return res.status(401).json({ success: false, message: "Invalid or expired token" });
+ }
 }
-   
 
-
-export { verifyPayment, uploadDetailsMegaDonor, uploadDetailsPremiumDonor,    uploadDonorDetails, getAllDonors};
+export {
+  uploadDonorDetails,
+  getAllDonors,
+  getDonationsByIdentifier,
+  getDonorType,
+};
 

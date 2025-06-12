@@ -1,64 +1,58 @@
 import mongoose from "mongoose";
 
-const paymentSchema = new mongoose.Schema({
-  paymentId: {
-    type: String,
-    required: true,
-    unique: true,
-  },
-  paymentRequestId: {
-    type: String,
-    required: true,
-  },
-  status: {
-    type: String,
-    enum: ["Credit", "Failed", "Pending"],
-    required: true,
-  },
-  amount: {
-    type: Number,
-    required: true,
-  },
-  buyerName: {
-    type: String,
-    required: true,
-  },
-  email: {
-    type: String,
-    required: true,
-    lowercase: true,
-    trim: true,
-  },
-  phone: {
-    type: String,
-  },
-  donorJwt: {
-    type: String,
-  },
-  detailsUploaded: {
-    type: Boolean,
-    default: false,
-  },
-  purpose: {
-    type : String,
-  },
-  donorType : {
-    type: String,
-    enum: ['mega', 'premium'], 
-  }
-}, {
-  timestamps: true, // createdAt and updatedAt
-});
+const paymentSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+    },
+    email: {
+      type: String,
+      required: true,
+    },
+    phone: {
+      type: String,
+      required: true,
+    },
+    amount: {
+      type: Number,
+      required: true,
+    },
+    razorpayOrderId: {
+      type: String,
+      required: true,
+    },
+    razorpayPaymentId: {
+      type: String,
+    },
+    razorpaySignature: {
+      type: String,
+    },
+    status: {
+      type: String,
+      enum: ["created", "paid", "failed"],
+      default: "created",
+    },
+     uploadCount: {
+      type: Number,
+      default: 0,
+    },
+    detailsUploaded: {
+      type: Boolean,
+      default: false,
+    },
 
-paymentSchema.pre('save', function(next) {
-  if (this.amount > 5000) {
-    this.donorType = 'mega';
-  } else {
-    this.donorType = 'premium';
-  }
-  next();
-});
-
+    donorType : {
+      type : String,
+      enum : ['mega', 'premium']
+    
+    },
+    donorJwt: {
+      type: String,
+    },
+  },
+  { timestamps: true }
+);
 
 export const Payment = mongoose.model("Payment", paymentSchema);
 

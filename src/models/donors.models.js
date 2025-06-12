@@ -13,6 +13,10 @@ const donorSchema = new Schema({
     type: Date,
     required: true,
   },
+  paymentId : {
+    type : String,
+    required: true,
+  },
   image: {
     type: String,
     required: function () {

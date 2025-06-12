@@ -24,6 +24,4 @@ app.use("/api/v1/users", userRouter)
 app.use("/api/v1/donor", donorRoute)
 
 
-// http://localhost:8000/api/v1/users/donate
-
 export { app }

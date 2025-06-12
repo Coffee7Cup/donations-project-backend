@@ -1,101 +1,143 @@
-import { Cashfree, CFEnvironment } from "cashfree-pg";
-import axios from "axios";
+import Razorpay from "razorpay";
+import crypto from "crypto";
+import jwt from "jsonwebtoken";
+import { Payment } from "../models/payment.model.js";
 
-const createOrder = async (req, res) => {};
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
 
-const donateCashFree = async (req, res) => {
-  const { name, email, phone, amount, message } = req.body;
-
+// CREATE ORDER
+export const createRazorpayOrder = async (req, res) => {
   try {
-    const response = await axios.post(
-      "https://sandbox.cashfree.com/pg/orders", // or production
-      {
-        order_amount: Number(amount),
-        order_currency: "INR",
-        customer_details: {
-          customer_id: email, // or any unique ID
-          customer_email: email,
-          customer_phone: phone,
-          customer_name: name,
-        },
-        order_meta: {
-          return_url: "http://localhost:3000/thank-you", // optional
-          notify_url: "https://yourserver.com/webhook", // optional
-        },
-        order_note: message || "", // optional message
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-version": "2022-09-01",
-          "x-client-id": YOUR_CLIENT_ID,
-          "x-client-secret": YOUR_CLIENT_SECRET,
-        },
-      }
-    );
+    const { name, email, phone, amount } = req.body;
 
-    res.json({ paymentSessionId: response.data.payment_session_id });
-  } catch (error) {
-    console.error(error.response?.data || error.message);
-    res.status(500).json({ error: "Payment initialization failed." });
-  }
-};
+    const options = {
+      amount: amount * 100, // paise
+      currency: "INR",
+      receipt: `receipt_order_${Date.now()}`,
+    };
 
-const confirmDonationCashFree = async (req, res) => {
-  const { order_id } = req.query;
+    const order = await razorpay.orders.create(options);
 
-  try {
-    const cashfree = new Cashfree(
-      CFEnvironment.TEST,
-      "YOUR_CLIENT_ID",
-      "YOUR_CLIENT_SECRET"
-    );
-
-    const response = await cashfree.PGFetchOrder(order_id);
-    return res.json(response.data);
-  } catch (err) {
-    console.error("Error confirming donation:", err.response?.data || err);
-    return res.status(500).json({
-      success: false,
-      message: "Error confirming donation",
+    await Payment.create({
+      name,
+      email,
+      phone,
+      amount,
+      razorpayOrderId: order.id,
     });
+
+    res.status(200).json({
+      success: true,
+      order,
+      razorpayKey: process.env.RAZORPAY_KEY_ID,
+    });
+  } catch (err) {
+    console.error("Create order error:", err);
+    res.status(500).json({ success: false, message: "Order creation failed" });
   }
 };
 
-const createOrderInstaMojo = async (req, res) => {
+// VERIFY PAYMENT
+export const verifyRazorpayPayment = async (req, res) => {
   try {
-    const { name, email, phone, amount, purpose } = req.body;
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      name,
+      email,
+      phone,
+      amount,
+    } = req.body;
 
-    const response = await axios.post(
-      `${process.env.INSTAMOJO_BASE_URL}payment-requests/`,
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ success: false, message: "Missing payment info" });
+    }
+
+    const hmac = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET);
+    hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
+    const generatedSignature = hmac.digest("hex");
+
+    if (generatedSignature !== razorpay_signature) {
+      return res.status(400).json({ success: false, message: "Invalid signature" });
+    }
+
+    const donorType = amount >= 5000 ? "mega" : "premium";
+
+    const token = jwt.sign({ phone, paymentId: razorpay_payment_id }, process.env.JWT_SECRET, {
+      expiresIn: "1d",
+    });
+
+    const updated = await Payment.findOneAndUpdate(
+      { razorpayOrderId: razorpay_order_id },
       {
-        purpose: purpose || "Test Payment",
-        amount: amount || "100",
-        buyer_name: name,
+        name,
         email,
         phone,
-        redirect_url: "/donation-project-frontend/after-payment-page",//this url is showed even if the users cancles the payment BUT this url will get payment id etc
-        send_email: true,
-        send_sms: true,
-        allow_repeated_payments: false,
+        amount,
+        razorpayPaymentId: razorpay_payment_id,
+        razorpaySignature: razorpay_signature,
+        status: "paid",
+        donorType,
+        donorJwt: token,
       },
-      {
-        headers: {
-          "X-Api-Key": process.env.INSTAMOJO_API_KEY,
-          "X-Auth-Token": process.env.INSTAMOJO_AUTH_TOKEN,
-        },
-      }
+      { new: true }
     );
 
-    const longUrl = response.data.payment_request.longurl;
-    res.json({ paymentUrl: longUrl });
+    if (!updated) {
+      return res.status(404).json({ success: false, message: "Payment not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Payment verified",
+      donorJwt: token,
+      donorType,
+    });
   } catch (err) {
-    console.error(err?.response?.data || err.message);
-    res.status(500).json({ error: "Failed to create payment" });
+    console.error("Verify payment error:", err);
+    res.status(500).json({ success: false, message: "Verification failed" });
   }
-}
+};
 
-  
+export const getDonorJWT = async (req, res) => {
+  const { identifier, paymentId } = req.body;
 
 
-export { donateCashFree, confirmDonationCashFree, createOrderInstaMojo };
+  if (!identifier || !paymentId) {
+    return res.status(400).json({ success: false, message: "Identifier and paymentId required" });
+  }
+
+  const payment = await Payment.findOne({
+    _id: paymentId,
+  });
+
+  if (!payment) {
+    return res.status(404).json({ success: false, message: "Payment not found" });
+  }
+
+  const token = jwt.sign(
+    { phone: payment.phone, paymentId: payment._id },
+    process.env.JWT_SECRET,
+    { expiresIn: "1d" }
+  );
+
+  res.json({ success: true, token });
+};
+
+export const cancelPayment = async (req, res) => {
+  try {
+    const orderId = req.body.order_id
+
+    await Payment.findOneAndDelete({razorpayOrderId: orderId})
+
+    return res.status(500).json({success : true, message: "payment deleted successfully"})
+
+  } catch (err) {
+    return res.status(400).json({success: false, message: "payment unable to delete"})
+  } 
+};
+

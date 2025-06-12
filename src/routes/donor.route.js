@@ -1,25 +1,21 @@
 import { Router } from "express";
 import multer from "multer";
 import {
-  verifyPayment,
-  uploadDetailsMegaDonor,
-  uploadDetailsPremiumDonor,
+  uploadDonorDetails,
   getAllDonors,
-  uploadDonorDetails
+  getDonationsByIdentifier,
+  getDonorType
 } from "../controllers/donor.controller.js";
-import verifyJWT from "../middleware/verifyjwt.middleware.js";
-import { Payment } from "../models/payment.model.js";
-import donorRedirectMiddleware from "../middleware/donorRedirect.middleware.js";
+import { verifyJWT } from "../middleware/verifyjwt.middleware.js";
 
 const router = Router();
+
 const upload = multer({ storage: multer.memoryStorage() });
 
-router.get("/verify-payment", verifyPayment);
-router.get("/route-donor", donorRedirectMiddleware)
-
-router.post("/upload", verifyJWT, upload.single("image"), uploadDonorDetails);
-router.get("/get-donors", getAllDonors)
+router.route("/route-donor").get(verifyJWT, getDonorType);
+router.route("/upload").post(verifyJWT, upload.single("image"), uploadDonorDetails);
+router.route("/get-donors").get(getAllDonors);
+router.route('/get-donations').post(getDonationsByIdentifier)
 
 export default router;
-
 

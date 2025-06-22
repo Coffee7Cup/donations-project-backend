@@ -3,7 +3,7 @@ import { Payment } from "../models/payment.model.js" // adjust the path as neede
 import bcrypt from "bcrypt";
 
 // Connect to MongoDB
-await mongoose.connect("mongodb+srv://nobodyknows010203:7dx8BFa9vukmpJvX@cluster0.dvy7xnb.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"); 
+await mongoose.connect(process.env.MONGODB_URI); 
 
 const generatePayments = async () => {
   const payments = [];

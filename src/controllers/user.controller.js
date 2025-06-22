@@ -55,7 +55,9 @@ export const verifyRazorpayPayment = async (req, res) => {
     } = req.body;
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return res.status(400).json({ success: false, message: "Missing payment info" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Missing payment info" });
     }
 
     const hmac = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET);
@@ -63,14 +65,20 @@ export const verifyRazorpayPayment = async (req, res) => {
     const generatedSignature = hmac.digest("hex");
 
     if (generatedSignature !== razorpay_signature) {
-      return res.status(400).json({ success: false, message: "Invalid signature" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid signature" });
     }
 
     const donorType = amount >= 5000 ? "mega" : "premium";
 
-    const token = jwt.sign({ phone, paymentId: razorpay_payment_id }, process.env.JWT_SECRET, {
-      expiresIn: "1d",
-    });
+    const token = jwt.sign(
+      { phone, paymentId: razorpay_payment_id },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "1d",
+      }
+    );
 
     const updated = await Payment.findOneAndUpdate(
       { razorpayOrderId: razorpay_order_id },
@@ -89,7 +97,9 @@ export const verifyRazorpayPayment = async (req, res) => {
     );
 
     if (!updated) {
-      return res.status(404).json({ success: false, message: "Payment not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Payment not found" });
     }
 
     res.status(200).json({
@@ -107,9 +117,10 @@ export const verifyRazorpayPayment = async (req, res) => {
 export const getDonorJWT = async (req, res) => {
   const { identifier, paymentId, password } = req.body;
 
-
   if (!identifier || !paymentId) {
-    return res.status(400).json({ success: false, message: "Identifier and paymentId required" });
+    return res
+      .status(400)
+      .json({ success: false, message: "Identifier and paymentId required" });
   }
 
   const payment = await Payment.findOne({
@@ -117,11 +128,22 @@ export const getDonorJWT = async (req, res) => {
   });
 
   if (!payment) {
-    return res.status(404).json({ success: false, message: "Payment not found" });
+    return res
+      .status(404)
+      .json({ success: false, message: "Payment not found" });
   }
 
-  if(!payment.comparePassword(password)) {
-    return res.status(400).json({ success: false, message: "Incorrect password" });
+  try {
+    const isMatch = await payment.comparePassword(password);
+    if (!isMatch) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Incorrect password" });
+    }
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ success: false, message: "Error checking password" });
   }
 
   const token = jwt.sign(
@@ -135,14 +157,16 @@ export const getDonorJWT = async (req, res) => {
 
 export const cancelPayment = async (req, res) => {
   try {
-    const orderId = req.body.order_id
+    const orderId = req.body.order_id;
 
-    await Payment.findOneAndDelete({razorpayOrderId: orderId})
+    await Payment.findOneAndDelete({ razorpayOrderId: orderId });
 
-    return res.status(500).json({success : true, message: "payment deleted successfully"})
-
+    return res
+      .status(500)
+      .json({ success: true, message: "payment deleted successfully" });
   } catch (err) {
-    return res.status(400).json({success: false, message: "payment unable to delete"})
-  } 
+    return res
+      .status(400)
+      .json({ success: false, message: "payment unable to delete" });
+  }
 };
-

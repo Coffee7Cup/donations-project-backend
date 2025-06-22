@@ -121,4 +121,4 @@ dist
 .DS_Store
 
 #scripts that i run locally
-./src/scripts
+/src/scripts/

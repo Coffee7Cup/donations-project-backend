@@ -1,4 +1,3 @@
-import jwt from "jsonwebtoken";
 import sharp from "sharp";
 import { Payment } from "../models/payment.model.js";
 import { Donor } from "../models/donors.models.js";

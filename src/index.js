@@ -18,12 +18,12 @@ dotenv.config({
 // })
 
 connectDB()
-try{
+try{    
     app.listen(process.env.PORT || 8080, () => {
-        console.log(`⚙️ Server is running at port : ${process.env.PORT}`);
+        console.log(`⚙️ Server is running`);
     })
 }catch(err){
-    console.log("Error starting the server:", err);
+    console.log("Error starting the server:");
 }
 
 

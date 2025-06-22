@@ -11,7 +11,7 @@ const razorpay = new Razorpay({
 // CREATE ORDER
 export const createRazorpayOrder = async (req, res) => {
   try {
-    const { name, email, phone, amount } = req.body;
+    const { name, email, phone, amount, password } = req.body;
 
     const options = {
       amount: amount * 100, // paise
@@ -26,6 +26,7 @@ export const createRazorpayOrder = async (req, res) => {
       email,
       phone,
       amount,
+      password,
       razorpayOrderId: order.id,
     });
 
@@ -104,7 +105,7 @@ export const verifyRazorpayPayment = async (req, res) => {
 };
 
 export const getDonorJWT = async (req, res) => {
-  const { identifier, paymentId } = req.body;
+  const { identifier, paymentId, password } = req.body;
 
 
   if (!identifier || !paymentId) {
@@ -117,6 +118,10 @@ export const getDonorJWT = async (req, res) => {
 
   if (!payment) {
     return res.status(404).json({ success: false, message: "Payment not found" });
+  }
+
+  if(!payment.comparePassword(password)) {
+    return res.status(400).json({ success: false, message: "Incorrect password" });
   }
 
   const token = jwt.sign(
